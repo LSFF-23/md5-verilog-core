@@ -1,10 +1,10 @@
-module md5_core (clk, rst, input_data, hash, done);
+module md5_core (clk, h_rst, s_rst, input_data, hash, done);
 localparam A0 = 32'h67452301;
 localparam B0 = 32'hefcdab89;
 localparam C0 = 32'h98badcfe;
 localparam D0 = 32'h10325476;
 
-input clk, rst;
+input clk, h_rst, s_rst;
 input [0:511] input_data;
 output [0:127] hash;
 output reg done;
@@ -134,14 +134,14 @@ end
 endfunction
 
 // fix endian order: abc = 61626380, but must be = 80636261
-function [0:31] feo (input [0:31] v);
+function [0:31] feo32 (input [0:31] v);
 begin
-    feo = {v[24:31], v[16:23], v[8:15], v[0:7]};
+    feo32 = {v[24:31], v[16:23], v[8:15], v[0:7]};
 end
 endfunction
 
-always @(posedge clk or posedge rst) begin
-    if (rst) begin
+always @(posedge clk or posedge h_rst) begin
+    if (h_rst) begin
         step <= 0;
         flag <= 0;
         done <= 0;
@@ -153,15 +153,23 @@ always @(posedge clk or posedge rst) begin
         b <= B0;
         c <= C0;
         d <= D0;
+    end else if (s_rst && done) begin
+        step <= 0;
+        flag <= 0;
+        done <= 0;
+        a <= A;
+        b <= B;
+        c <= C;
+        d <= D;
     end else if (!flag) begin
         if (step >= 0 && step <= 15)
-            b <= b + lcs(a + F(b, c, d) + feo(input_data[32*step +: 32]) + asct(step), prs(step));
+            b <= b + lcs(a + F(b, c, d) + feo32(input_data[32*step +: 32]) + asct(step), prs(step));
         else if (step >= 16 && step <= 31)
-            b <= b + lcs(a + G(b, c, d) + feo(input_data[32*((5*step+1) & 4'b1111) +: 32]) + asct(step), prs(step));
+            b <= b + lcs(a + G(b, c, d) + feo32(input_data[32*((5*step+1) & 4'b1111) +: 32]) + asct(step), prs(step));
         else if (step >= 32 && step <= 47)
-            b <= b + lcs(a + H(b, c, d) + feo(input_data[32*((3*step+5) & 4'b1111) +: 32]) + asct(step), prs(step));
+            b <= b + lcs(a + H(b, c, d) + feo32(input_data[32*((3*step+5) & 4'b1111) +: 32]) + asct(step), prs(step));
         else
-            b <= b + lcs(a + I(b, c, d) + feo(input_data[32*((7*step) & 4'b1111) +: 32]) + asct(step), prs(step));  
+            b <= b + lcs(a + I(b, c, d) + feo32(input_data[32*((7*step) & 4'b1111) +: 32]) + asct(step), prs(step));  
           
         a <= d;
         d <= c;
@@ -180,6 +188,6 @@ always @(posedge clk or posedge rst) begin
     end
 end
 
-assign hash = {feo(A), feo(B), feo(C), feo(D)};
+assign hash = {feo32(A), feo32(B), feo32(C), feo32(D)};
 
 endmodule
