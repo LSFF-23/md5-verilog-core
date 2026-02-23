@@ -11,7 +11,8 @@ localparam IDLE = 3'h0;
 localparam COPY_INPUT = 3'h1;
 localparam APPEND_STEP = 3'h2;
 localparam WAIT_SIGNAL = 3'h4;
-localparam COMPLETE = 3'h7;
+localparam COMPLETE1 = 3'h6;
+localparam COMPLETE2 = 3'h7;
 
 reg [2:0] state, next_state;
 
@@ -29,9 +30,10 @@ always @* begin
     case (state)
         IDLE: next_state = (start) ? COPY_INPUT : IDLE;
         COPY_INPUT: next_state = APPEND_STEP;
-        APPEND_STEP: next_state = (remainder < 440) ? COMPLETE : WAIT_SIGNAL;
-        WAIT_SIGNAL: next_state = (resume) ? COMPLETE : WAIT_SIGNAL;
-        COMPLETE: next_state = (start) ? COPY_INPUT : COMPLETE;
+        APPEND_STEP: next_state = (remainder < 440) ? COMPLETE1 : WAIT_SIGNAL;
+        WAIT_SIGNAL: next_state = (resume) ? COMPLETE2 : WAIT_SIGNAL;
+        COMPLETE1: next_state = (start) ? COPY_INPUT : COMPLETE1;
+        COMPLETE2: next_state = (start) ? COPY_INPUT : COMPLETE2;
         default: next_state = IDLE;
     endcase
 end
@@ -52,8 +54,9 @@ end
 function [1:0] status_code (input [2:0] state);
 begin
 	case (state)
-		COMPLETE: status_code = 2'b10;
+		COMPLETE1: status_code = 2'b10;
 		WAIT_SIGNAL: status_code = 2'b01;
+        COMPLETE2: status_code = 2'b11;
 		default: status_code = 2'b00;
 	endcase
 end

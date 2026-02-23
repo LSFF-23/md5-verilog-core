@@ -6,6 +6,7 @@ output [6:0] hex0, hex1, hex2, hex3, hex4, hex5;
 output done;
 
 wire core_start, core_resume, core_done;
+wire [0:511] core_input;
 wire [0:127] core_hash;
 wire pad_start, pad_resume;
 wire [0:511] pad_input, pad_output;
@@ -27,13 +28,13 @@ localparam CORE_START1 = 4'h6;
 localparam CORE_START2 = 4'h7;
 localparam CORE_RESUME1 = 4'h8;
 localparam CORE_RESUME2 = 4'h9;
-localparam CORE_COUNTER = 4'hB;
-localparam CORE_WAIT = 4'hC;
+localparam CORE_WAIT = 4'hB;
+localparam CORE_COUNTER = 4'hC;
 localparam CORE_EVAL = 4'hD;
 localparam FINISHED = 4'hE;
 
 md5_padding p (clk, rst_n, pad_start, pad_resume, pad_input, pad_size, pad_output, pad_status);
-md5_core core (clk, rst_n, core_start, core_resume, pad_output, core_hash, core_done);
+md5_core core (clk, rst_n, core_start, core_resume, core_input, core_hash, core_done);
 
 assign done = state == FINISHED;
 
@@ -45,12 +46,14 @@ assign hex3 = segments_decoder(selector_block[12:15]);
 assign hex4 = segments_decoder(selector_block[16:19]);
 assign hex5 = segments_decoder(selector_block[20:23]);
 
+assign block_amount = (data_sel == 2'b11) ? 2'b11 : 2'b01;
 assign pad_input = input_selector(data_sel, block_count);
 assign pad_size = size_selector(data_sel);
-assign block_amount = (data_sel == 2'b11) ? 2'b11 : 2'b01;
 assign pad_start = (state == PAD_START1) | (state == PAD_START2);
-assign core_start = (state == CORE_START1) | (state == CORE_START2);
 assign pad_resume = (state == PAD_RESUME1) | (state == PAD_RESUME2);
+
+assign core_input = (block_count + 1'b1 == block_amount) ? pad_output : pad_input;
+assign core_start = (state == CORE_START1) | (state == CORE_START2);
 assign core_resume = (state == CORE_RESUME1) | (state == CORE_RESUME2);
 
 function [6:0] segments_decoder (input [3:0] hex);
@@ -86,12 +89,12 @@ function [0:511] input_selector (input [1:0] sel, input [1:0] bc);
         2'b01: input_selector = {"Softex", 464'b0};
         2'b10: input_selector = {"UEMA/PECS/CI DIGITAL - Trabalho Orientado I - Hashing: MD5", 48'b0};
         2'b11: begin
-            if (bc == 2'b00)
-                input_selector = "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do ";
-            else if (bc == 2'b01)
-                input_selector = "eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut e";
-            else
-                input_selector = "nim ad minim veniam, quis nostrud exercitation ullamco laboris";
+            case (bc)
+                2'b00: input_selector = "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do ";
+                2'b01: input_selector = "eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut e";
+                2'b10: input_selector = {"nim ad minim veniam, quis nostrud exercitation ullamco laboris", 16'b0};
+                default: input_selector = 512'b0;
+            endcase 
         end
         default: input_selector = 512'b0;
     endcase
@@ -118,34 +121,57 @@ always @* begin
     next_state = state;
     case (state)
         IDLE: next_state = (start) ? INIT_COUNTER : IDLE;
-        INIT_COUNTER: next_state = PAD_START1;
+        INIT_COUNTER: begin
+            if (block_count == 0 && block_amount == 1)
+                next_state = PAD_START1;
+            else
+                next_state = CORE_START1;
+        end
         PAD_START1: next_state = PAD_START2;
         PAD_START2: next_state = PAD_WAIT;
         PAD_RESUME1: next_state = PAD_RESUME2;
         PAD_RESUME2: next_state = PAD_WAIT;
         PAD_WAIT: begin
-            if (pad_status[0] | pad_status[1])
-                if (block_count == 0)
-                    next_state = CORE_START1;
-                else
-                    next_state = CORE_RESUME1;
-            else
-                next_state = PAD_WAIT;
+            case (pad_status)
+                2'b00: next_state = PAD_WAIT;
+                2'b01: begin
+                    if (block_count == 0)
+                        next_state = CORE_START1;
+                    else
+                        next_state = CORE_RESUME1;
+                end
+                2'b10: begin
+                    if (block_count == 0)
+                        next_state = CORE_START1;
+                    else
+                        next_state = CORE_RESUME1;
+                end
+                2'b11: next_state = CORE_RESUME1;
+            endcase
+            // if (pad_status[0] | pad_status[1])
+            //     if (block_count == 0 && block_amount == 1)
+            //         next_state = CORE_START1;
+            //     else
+            //         next_state = CORE_RESUME1;
+            // else
+            //     next_state = PAD_WAIT;
         end
         CORE_START1: next_state = CORE_START2;
-        CORE_START2: next_state = CORE_COUNTER;
+        CORE_START2: next_state = CORE_WAIT;
         CORE_RESUME1: next_state = CORE_RESUME2;
-        CORE_RESUME2: next_state = CORE_COUNTER;
-        CORE_COUNTER: next_state = CORE_WAIT;
-        CORE_WAIT: next_state = (core_done) ? CORE_EVAL : CORE_WAIT;
+        CORE_RESUME2: next_state = CORE_WAIT;
+        CORE_WAIT: next_state = (core_done) ? CORE_COUNTER : CORE_WAIT;
+        CORE_COUNTER: next_state = CORE_EVAL;
         CORE_EVAL: begin
-            if (block_count == block_amount)
-                if (pad_status[0])
-                    next_state = PAD_RESUME1;
-                else
-                    next_state = FINISHED;
+            if (block_count + 1'b1 == block_amount)
+                case (pad_status)
+                    2'b00: next_state = PAD_START1;
+                    2'b01: next_state = PAD_RESUME1;
+                    2'b10: next_state = FINISHED;
+                    default: next_state = IDLE;
+                endcase
             else
-                next_state = PAD_START1;
+                next_state = CORE_RESUME1;
         end
         FINISHED: next_state = (start) ? INIT_COUNTER : FINISHED;
     endcase
@@ -153,8 +179,12 @@ end
 
 always @(posedge clk) begin
     case (state)
+        IDLE: block_count <= 0;
         INIT_COUNTER: block_count <= 0;
-        CORE_COUNTER: block_count <= (block_count < block_amount) ? block_count + 1'b1 : block_count;
+        CORE_COUNTER: begin
+            if (block_count + 1'b1 < block_amount)
+                block_count <= block_count + 1'b1;
+        end
     endcase
 end
 

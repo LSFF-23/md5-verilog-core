@@ -13,17 +13,17 @@ initial begin
     clk = 0; rst_n = 0; start = 0; hex_sel = 4'b0000; #10
     rst_n = 1; #10
 
-    // data_sel = 2'b00;
-    // start = 1; #10
-    // start = 0; #800
+    data_sel = 2'b00;
+    start = 1; #10
+    start = 0; #800
 
-    // data_sel = 2'b01;
-    // start = 1; #10
-    // start = 0; #800
+    data_sel = 2'b01;
+    start = 1; #10
+    start = 0; #800
     
-    // data_sel = 2'b10;
-    // start = 1; #10
-    // start = 0; #1600
+    data_sel = 2'b10;
+    start = 1; #10
+    start = 0; #1600
 
     data_sel = 2'b11;
     start = 1; #10
