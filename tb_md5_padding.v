@@ -10,8 +10,8 @@ md5_padding dut (clk, rst, start, resume, input_data, input_size, padded_data, s
 always #5 clk = !clk;
 
 initial begin
-    clk = 0; rst = 1; start = 0; resume = 0; #10
-    rst = 0; #10
+    clk = 0; rst = 0; start = 0; resume = 0; #10
+    rst = 1; #10
 
     input_data = 512'b0;
     input_data[0:23] = "abc";

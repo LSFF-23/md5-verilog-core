@@ -1,5 +1,5 @@
-module md5_padding (clk, rst, start, resume, input_data, input_size, padded_data, status);
-input clk, rst, start, resume;
+module md5_padding (clk, rst_n, start, resume, input_data, input_size, padded_data, status);
+input clk, rst_n, start, resume;
 input [0:511] input_data;
 input [63:0] input_size;
 output reg [0:511] padded_data;
@@ -15,27 +15,10 @@ localparam COMPLETE = 3'h7;
 
 reg [2:0] state, next_state;
 
-// status tells if there are two padded blocks to output
-function [1:0] status_code (input [2:0] state);
-begin
-	case (state)
-		WAIT_SIGNAL: status_code = 2'b10;
-		COMPLETE: status_code = 2'b11;
-		default: status_code = 2'b00;
-	endcase
-end
-endfunction
-
-// fix endian order (64 bits)
-function [63:0] feo64 (input [63:0] v);
-	feo64 = {v[7:0], v[15:8], v[23:16], v[31:24], 
-				v[39:32], v[47:40], v[55:48], v[63:56]};
-endfunction
-
 assign status = status_code(state);
 
-always @(posedge clk or posedge rst) begin
-    if (rst)
+always @(posedge clk or negedge rst_n) begin
+    if (!rst_n)
         state <= IDLE;
     else
         state <= next_state;
@@ -64,5 +47,22 @@ always @(posedge clk) begin
         WAIT_SIGNAL: if (resume) padded_data <= {448'b0, feo64(input_size)};
     endcase
 end
+
+// status tells if there are two padded blocks to output
+function [1:0] status_code (input [2:0] state);
+begin
+	case (state)
+		COMPLETE: status_code = 2'b10;
+		WAIT_SIGNAL: status_code = 2'b01;
+		default: status_code = 2'b00;
+	endcase
+end
+endfunction
+
+// fix endian order (64 bits)
+function [63:0] feo64 (input [63:0] v);
+	feo64 = {v[7:0], v[15:8], v[23:16], v[31:24], 
+				v[39:32], v[47:40], v[55:48], v[63:56]};
+endfunction
 
 endmodule

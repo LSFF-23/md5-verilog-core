@@ -9,8 +9,8 @@ md5_core dut (clk, rst, start, resume, input_data, hash, done);
 always #5 clk = !clk;
 
 initial begin
-    clk = 0; rst = 1; start = 0; resume = 0; #10
-    rst = 0; #10
+    clk = 0; rst = 0; start = 0; resume = 0; #10
+    rst = 1; #10
 
     input_data = 512'h58585858585858585858585858585858585858585858585858585858585858585858585858585858585858585858585858585858585858585858585858585858;
     start = 1; #10
