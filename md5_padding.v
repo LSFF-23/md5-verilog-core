@@ -1,5 +1,5 @@
-module md5_padding (clk, h_rst, s_rst, input_data, input_size, padded_data, status);
-input clk, h_rst, s_rst;
+module md5_padding (clk, rst, start, resume, input_data, input_size, padded_data, status);
+input clk, rst, start, resume;
 input [0:511] input_data;
 input [63:0] input_size;
 output reg [0:511] padded_data;
@@ -34,40 +34,34 @@ endfunction
 
 assign status = status_code(state);
 
-always @(posedge clk or posedge h_rst) begin
-    if (h_rst)
+always @(posedge clk or posedge rst) begin
+    if (rst)
         state <= IDLE;
     else
         state <= next_state;
 end
 
+always @* begin
+    next_state = state;
+    case (state)
+        IDLE: next_state = (start) ? COPY_INPUT : IDLE;
+        COPY_INPUT: next_state = APPEND_STEP;
+        APPEND_STEP: next_state = (remainder < 440) ? COMPLETE : WAIT_SIGNAL;
+        WAIT_SIGNAL: next_state = (resume) ? COMPLETE : WAIT_SIGNAL;
+        COMPLETE: next_state = (start) ? COPY_INPUT : COMPLETE;
+        default: next_state = IDLE;
+    endcase
+end
+
 always @(posedge clk) begin
     case (state)
-        IDLE: begin
-            padded_data <= 512'b0;
-            next_state <= COPY_INPUT;
-        end
-        COPY_INPUT: begin
-            padded_data <= input_data;
-            next_state <= APPEND_STEP;
-        end
+        IDLE: padded_data <= 512'b0;
+        COPY_INPUT: padded_data <= input_data;
         APPEND_STEP: begin
             padded_data[remainder] <= 1'b1;
-            if (remainder < 440) begin
-                padded_data[447:511] <= feo64(input_size);
-                next_state <= COMPLETE;
-            end else
-                next_state <= WAIT_SIGNAL;
+            if (remainder < 440) padded_data[447:511] <= feo64(input_size);
         end
-        WAIT_SIGNAL: begin
-            if (s_rst) begin
-                padded_data <= {448'b0, feo64(input_size)};
-                next_state <= COMPLETE;
-            end else
-                next_state <= WAIT_SIGNAL;
-        end
-        COMPLETE: next_state <= COMPLETE;
-        default: next_state <= state;
+        WAIT_SIGNAL: if (resume) padded_data <= {448'b0, feo64(input_size)};
     endcase
 end
 

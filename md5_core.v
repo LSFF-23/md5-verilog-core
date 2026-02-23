@@ -1,18 +1,36 @@
-module md5_core (clk, h_rst, s_rst, input_data, hash, done);
+module md5_core (clk, rst, start, resume, input_data, hash, done);
+input clk, rst, start, resume;
+input [0:511] input_data;
+output [0:127] hash;
+output done;
+
 localparam A0 = 32'h67452301;
 localparam B0 = 32'hefcdab89;
 localparam C0 = 32'h98badcfe;
 localparam D0 = 32'h10325476;
 
-input clk, h_rst, s_rst;
-input [0:511] input_data;
-output [0:127] hash;
-output reg done;
-
 reg [0:31] A, B, C, D;
 reg [0:31] a, b, c, d;
 reg [5:0] step;
-reg flag;
+
+localparam IDLE = 3'b000;
+localparam INIT_ABCD = 3'b001;
+localparam COPY_ABCD = 3'b010;
+localparam PROCESSING = 3'b011;
+localparam SUM_ABCD = 3'b100;
+localparam WAITING = 3'b101;
+
+reg [2:0] state, next_state;
+
+// fix endian order: abc = 61626380, but must be = 80636261
+function [0:31] feo32 (input [0:31] v);
+begin
+    feo32 = {v[24:31], v[16:23], v[8:15], v[0:7]};
+end
+endfunction
+
+assign hash = {feo32(A), feo32(B), feo32(C), feo32(D)};
+assign done = state == WAITING;
 
 function [0:31] F (input [0:31] X, Y, Z);
     F = (X & Y) | (~X & Z);
@@ -133,61 +151,71 @@ begin
 end
 endfunction
 
-// fix endian order: abc = 61626380, but must be = 80636261
-function [0:31] feo32 (input [0:31] v);
-begin
-    feo32 = {v[24:31], v[16:23], v[8:15], v[0:7]};
-end
-endfunction
-
-always @(posedge clk or posedge h_rst) begin
-    if (h_rst) begin
-        step <= 0;
-        flag <= 0;
-        done <= 0;
-        A <= A0;
-        B <= B0;
-        C <= C0;
-        D <= D0;
-        a <= A0;
-        b <= B0;
-        c <= C0;
-        d <= D0;
-    end else if (s_rst && done) begin
-        step <= 0;
-        flag <= 0;
-        done <= 0;
-        a <= A;
-        b <= B;
-        c <= C;
-        d <= D;
-    end else if (!flag) begin
-        if (step >= 0 && step <= 15)
-            b <= b + lcs(a + F(b, c, d) + feo32(input_data[32*step +: 32]) + asct(step), prs(step));
-        else if (step >= 16 && step <= 31)
-            b <= b + lcs(a + G(b, c, d) + feo32(input_data[32*((5*step+1) & 4'b1111) +: 32]) + asct(step), prs(step));
-        else if (step >= 32 && step <= 47)
-            b <= b + lcs(a + H(b, c, d) + feo32(input_data[32*((3*step+5) & 4'b1111) +: 32]) + asct(step), prs(step));
-        else
-            b <= b + lcs(a + I(b, c, d) + feo32(input_data[32*((7*step) & 4'b1111) +: 32]) + asct(step), prs(step));  
-          
-        a <= d;
-        d <= c;
-        c <= b;
-        {flag, step} <= step + 1'b1;
-    end else begin
-        done <= 1;
-        A <= A + a;
-        B <= B + b;
-        C <= C + c;
-        D <= D + d;
-        a <= 32'b0;
-        b <= 32'b0;
-        c <= 32'b0;
-        d <= 32'b0;
-    end
+// finite state machine
+always @(posedge clk or posedge rst) begin
+    if (rst)
+        state <= IDLE;
+    else
+        state <= next_state;
 end
 
-assign hash = {feo32(A), feo32(B), feo32(C), feo32(D)};
+always @* begin
+    next_state = state;
+    case (state)
+        IDLE: next_state = (start) ? INIT_ABCD : IDLE;
+        INIT_ABCD: next_state = COPY_ABCD;
+        COPY_ABCD: next_state = PROCESSING;
+        PROCESSING: next_state = (step == 63) ? SUM_ABCD : PROCESSING;
+        SUM_ABCD: next_state = WAITING;
+        WAITING: begin
+            if (start)
+                next_state = INIT_ABCD;
+            else if (resume)
+                next_state = COPY_ABCD;
+            else
+                next_state = WAITING;
+        end
+        default: next_state = IDLE;
+    endcase
+end
+
+always @(posedge clk) begin
+    case (state)
+        INIT_ABCD: begin
+            A <= A0;
+            B <= B0;
+            C <= C0;
+            D <= D0;
+        end
+        COPY_ABCD: begin
+            a <= A;
+            b <= B;
+            c <= C;
+            d <= D;
+            step <= 0;
+        end
+        PROCESSING: begin
+            if (step >= 0 && step <= 15)
+                b <= b + lcs(a + F(b, c, d) + feo32(input_data[32*step +: 32]) + asct(step), prs(step));
+            else if (step >= 16 && step <= 31)
+                b <= b + lcs(a + G(b, c, d) + feo32(input_data[32*((5*step+1) & 4'b1111) +: 32]) + asct(step), prs(step));
+            else if (step >= 32 && step <= 47)
+                b <= b + lcs(a + H(b, c, d) + feo32(input_data[32*((3*step+5) & 4'b1111) +: 32]) + asct(step), prs(step));
+            else
+                b <= b + lcs(a + I(b, c, d) + feo32(input_data[32*((7*step) & 4'b1111) +: 32]) + asct(step), prs(step));  
+            
+            a <= d;
+            d <= c;
+            c <= b;
+            step <= step + 1'b1;
+        end
+        SUM_ABCD: begin
+            A <= A + a;
+            B <= B + b;
+            C <= C + c;
+            D <= D + d;
+        end
+    endcase
+end
 
 endmodule
