@@ -18,12 +18,12 @@ localparam INIT_ABCD = 3'b001;
 localparam COPY_ABCD = 3'b010;
 localparam PROCESSING = 3'b011;
 localparam SUM_ABCD = 3'b100;
-localparam WAITING = 3'b101;
+localparam FINISHED = 3'b101;
 
 reg [2:0] state, next_state;
 
 assign hash = {feo32(A), feo32(B), feo32(C), feo32(D)};
-assign done = state == WAITING;
+assign done = state == FINISHED;
 
 // finite state machine
 always @(posedge clk or negedge rst_n) begin
@@ -40,14 +40,14 @@ always @* begin
         INIT_ABCD: next_state = COPY_ABCD;
         COPY_ABCD: next_state = PROCESSING;
         PROCESSING: next_state = (step == 63) ? SUM_ABCD : PROCESSING;
-        SUM_ABCD: next_state = WAITING;
-        WAITING: begin
+        SUM_ABCD: next_state = FINISHED;
+        FINISHED: begin
             if (start)
                 next_state = INIT_ABCD;
             else if (resume)
                 next_state = COPY_ABCD;
             else
-                next_state = WAITING;
+                next_state = FINISHED;
         end
         default: next_state = IDLE;
     endcase
