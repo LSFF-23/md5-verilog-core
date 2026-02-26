@@ -1,26 +1,28 @@
-module md5_padding (clk, rst_n, start, resume, input_data, input_size, padded_data, status);
+module md5_padding (clk, rst_n, start, resume, input_data, input_size, padded_data, waiting, done);
 input clk, rst_n, start, resume;
 input [0:511] input_data;
 input [63:0] input_size;
 output reg [0:511] padded_data;
-output [1:0] status;
+output reg done;
+output waiting;
 
-wire [8:0] remainder = input_size[8:0];
+wire [8:0] remainder;
 
+localparam RESET = 3'h3;
 localparam IDLE = 3'h0;
 localparam COPY_INPUT = 3'h1;
 localparam APPEND_STEP = 3'h2;
 localparam WAIT_SIGNAL = 3'h4;
-localparam COMPLETE1 = 3'h6;
-localparam COMPLETE2 = 3'h7;
+localparam COMPLETE = 3'h6;
 
 reg [2:0] state, next_state;
 
-assign status = status_code(state);
+assign remainder = input_size[8:0];
+assign waiting = state == WAIT_SIGNAL;
 
 always @(posedge clk or negedge rst_n) begin
     if (!rst_n)
-        state <= IDLE;
+        state <= RESET;
     else
         state <= next_state;
 end
@@ -28,44 +30,43 @@ end
 always @* begin
     next_state = state;
     case (state)
+        RESET: next_state = IDLE;
         IDLE: next_state = (start) ? COPY_INPUT : IDLE;
         COPY_INPUT: next_state = APPEND_STEP;
-        APPEND_STEP: next_state = (remainder < 440) ? COMPLETE1 : WAIT_SIGNAL;
-        WAIT_SIGNAL: next_state = (resume) ? COMPLETE2 : WAIT_SIGNAL;
-        COMPLETE1: next_state = (start) ? COPY_INPUT : COMPLETE1;
-        COMPLETE2: next_state = (start) ? COPY_INPUT : COMPLETE2;
+        APPEND_STEP: next_state = (remainder < 440) ? COMPLETE : WAIT_SIGNAL;
+        WAIT_SIGNAL: begin
+            if (start)
+                next_state = IDLE;
+            else if (resume)
+                next_state = COMPLETE;
+            else
+                next_state = WAIT_SIGNAL;
+        end
+        COMPLETE: next_state = IDLE;
         default: next_state = IDLE;
     endcase
 end
 
 always @(posedge clk) begin
     case (state)
-        IDLE: padded_data <= 512'b0;
-        COPY_INPUT: padded_data <= input_data;
+        RESET: done <= 0;
+        COPY_INPUT: begin
+            done <= 0;
+            padded_data <= input_data;
+        end
         APPEND_STEP: begin
             padded_data[remainder] <= 1'b1;
             if (remainder < 440) padded_data[447:511] <= feo64(input_size);
         end
         WAIT_SIGNAL: if (resume) padded_data <= {448'b0, feo64(input_size)};
+        COMPLETE: done <= 1;
     endcase
 end
-
-// status tells if there are two padded blocks to output
-function [1:0] status_code (input [2:0] state);
-begin
-	case (state)
-		COMPLETE1: status_code = 2'b10;
-		WAIT_SIGNAL: status_code = 2'b01;
-        COMPLETE2: status_code = 2'b11;
-		default: status_code = 2'b00;
-	endcase
-end
-endfunction
 
 // fix endian order (64 bits)
 function [63:0] feo64 (input [63:0] v);
 	feo64 = {v[7:0], v[15:8], v[23:16], v[31:24], 
-				v[39:32], v[47:40], v[55:48], v[63:56]};
+			 v[39:32], v[47:40], v[55:48], v[63:56]};
 endfunction
 
 endmodule

@@ -1,17 +1,17 @@
 module tb_md5_padding;
-reg clk, rst, start, resume;
+reg clk, rst_n, start, resume;
 reg [0:511] input_data;
 reg [63:0] input_size;
 wire [0:511] padded_data;
-wire [1:0] status;
+wire waiting, done;
 
-md5_padding dut (clk, rst, start, resume, input_data, input_size, padded_data, status);
+md5_padding dut (clk, rst_n, start, resume, input_data, input_size, padded_data, waiting, done);
 
 always #5 clk = !clk;
 
 initial begin
-    clk = 0; rst = 0; start = 0; resume = 0; #10
-    rst = 1; #10
+    clk = 0; rst_n = 0; start = 0; resume = 0; #10
+    rst_n = 1; #20
 
     input_data = 512'b0;
     input_data[0:23] = "abc";
