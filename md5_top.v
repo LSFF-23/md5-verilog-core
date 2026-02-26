@@ -16,23 +16,21 @@ wire [0:23] selector_block;
 wire is_last_block;
 wire [1:0] block_amount;
 reg [1:0] block_count;
-reg padding_round;
 reg [3:0] state, next_state;
 
-localparam RESET = 4'hF;
-localparam IDLE = 4'h0;
-localparam INIT_COUNTER = 4'hA;
-localparam PAD_START1 = 4'h1;
-localparam PAD_START2 = 4'h2;
-localparam PAD_RESUME1 = 4'h3;
-localparam PAD_RESUME2 = 4'h4;
-localparam PAD_WAIT = 4'h5;
-localparam CORE_START1 = 4'h6;
-localparam CORE_START2 = 4'h7;
-localparam CORE_RESUME1 = 4'h8;
-localparam CORE_RESUME2 = 4'h9;
-localparam CORE_WAIT = 4'hB;
-localparam CORE_COUNTER = 4'hC;
+localparam RESET = 4'h0;
+localparam IDLE = 4'h1;
+localparam INIT_COUNTER = 4'h2;
+localparam PAD_START1 = 4'h3;
+localparam PAD_START2 = 4'h4;
+localparam PAD_RESUME1 = 4'h5;
+localparam PAD_RESUME2 = 4'h6;
+localparam PAD_WAIT = 4'h7;
+localparam CORE_START1 = 4'h8;
+localparam CORE_START2 = 4'h9;
+localparam CORE_RESUME1 = 4'hA;
+localparam CORE_RESUME2 = 4'hB;
+localparam CORE_WAIT = 4'hC;
 localparam CORE_EVAL = 4'hD;
 localparam FINISHED = 4'hE;
 
@@ -78,7 +76,7 @@ always @* begin
         PAD_RESUME2: next_state = PAD_WAIT;
         PAD_WAIT: begin
             if (pad_waiting || pad_done)
-                if (block_count == 0 && block_amount == 1 && padding_round == 0)
+                if (block_count == 0 && block_amount == 1)
                     next_state = CORE_START1;
                 else
                     next_state = CORE_RESUME1;
@@ -90,7 +88,6 @@ always @* begin
         CORE_RESUME1: next_state = CORE_RESUME2;
         CORE_RESUME2: next_state = CORE_WAIT;
         CORE_WAIT: next_state = (core_done) ? CORE_EVAL : CORE_WAIT;
-        CORE_COUNTER: next_state = CORE_EVAL;
         CORE_EVAL: begin
             if (is_last_block)
                 if (pad_waiting)
@@ -111,11 +108,9 @@ always @(posedge clk) begin
         RESET, INIT_COUNTER: begin
             done <= 0;
             block_count <= 0;
-            padding_round <= 0;
         end
         CORE_EVAL: begin
             if (!is_last_block) block_count <= block_count + 1'b1;
-            if (is_last_block && pad_waiting) padding_round <= 1;
         end
         FINISHED: done <= 1;
     endcase
