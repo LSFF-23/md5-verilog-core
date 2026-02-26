@@ -11,16 +11,16 @@ always #5 clk = !clk;
 
 initial begin
     clk = 0; rst_n = 0; start = 0; resume = 0; #10
-    rst_n = 1; #20 // 20 to account new reset state
+    rst_n = 1; #20
 
     input_data = 512'b0;
     input_data[0:23] = "abc";
-    input_size = 64'h18; // 3 bytes = 24 bits
+    input_size = 64'h18;
     start = 1; #10
     start = 0; #100
 
     input_data[0:479] = "AAAAAAAAAABBBBBBBBBBCCCCCCCCCCDDDDDDDDDDEEEEEEEEEEFFFFFFFFFF";
-    input_size = 64'h1e0; // 60 bytes = 480 bits
+    input_size = 64'h1e0;
     start = 1; #10
     start = 0; #100
     resume = 1; #10
