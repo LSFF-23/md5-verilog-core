@@ -22,7 +22,6 @@ localparam WAITING = 3'b101;
 
 reg [2:0] state, next_state;
 
-// outputs
 assign hash = {feo32(A), feo32(B), feo32(C), feo32(D)};
 assign done = state == WAITING;
 
@@ -93,6 +92,7 @@ always @(posedge clk) begin
     endcase
 end
 
+// functions definitions
 //md5 functions
 function [0:31] F (input [0:31] X, Y, Z);
     F = (X & Y) | (~X & Z);

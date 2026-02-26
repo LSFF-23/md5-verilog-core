@@ -20,6 +20,7 @@ reg [2:0] state, next_state;
 assign remainder = input_size[8:0];
 assign waiting = state == WAIT_SIGNAL;
 
+// finite state machine
 always @(posedge clk or negedge rst_n) begin
     if (!rst_n)
         state <= RESET;
@@ -62,6 +63,7 @@ always @(posedge clk) begin
     endcase
 end
 
+// functions definitions
 // fix endian order (64 bits)
 function [63:0] feo64 (input [63:0] v);
 	feo64 = {v[7:0], v[15:8], v[23:16], v[31:24], 
