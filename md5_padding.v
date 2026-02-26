@@ -49,8 +49,7 @@ end
 
 always @(posedge clk) begin
     case (state)
-        RESET: done <= 0;
-        COPY_INPUT: begin
+        RESET, COPY_INPUT: begin
             done <= 0;
             padded_data <= input_data;
         end
