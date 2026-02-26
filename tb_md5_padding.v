@@ -11,7 +11,7 @@ always #5 clk = !clk;
 
 initial begin
     clk = 0; rst_n = 0; start = 0; resume = 0; #10
-    rst_n = 1; #20
+    rst_n = 1; #20 // 20 to account new reset state
 
     input_data = 512'b0;
     input_data[0:23] = "abc";
