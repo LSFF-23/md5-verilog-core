@@ -22,13 +22,48 @@ localparam FINISHED = 3'b101;
 
 reg [2:0] state, next_state;
 
-wire [8:0] j;
-wire [0:31] M_j;
-assign j = {block32_index(step), 5'b0};
-assign M_j = feo32(input_data[j +: 32]);
-
 assign hash = {feo32(A), feo32(B), feo32(C), feo32(D)};
 assign done = state == FINISHED;
+
+// processing variables
+reg [31:0] f_picker;
+reg [31:0] shifted_sum;
+wire [8:0] j = {block32_index(step), 5'b0};
+wire [0:31] M_j = feo32(input_data[j +: 32]);
+wire [31:0] sum_internal = (f_picker + a) + (M_j + asct(step));
+
+// processing combs
+always @* begin
+    case (step[5:4])
+        2'b00: f_picker = (b & c) | (~b & d);
+        2'b01: f_picker = (b & d) | (c & ~d);
+        2'b10: f_picker = b ^ c ^ d;
+        2'b11: f_picker = c ^ (b | ~d);
+        default: f_picker = 32'h0;
+    endcase
+end
+
+always @* begin
+    case (step[5:0])
+        6'd0, 6'd4, 6'd8, 6'd12:   shifted_sum = {sum_internal[24:0], sum_internal[31:25]};
+        6'd1, 6'd5, 6'd9, 6'd13:   shifted_sum = {sum_internal[19:0], sum_internal[31:20]};
+        6'd2, 6'd6, 6'd10, 6'd14:  shifted_sum = {sum_internal[14:0], sum_internal[31:15]};
+        6'd3, 6'd7, 6'd11, 6'd15:  shifted_sum = {sum_internal[9:0],  sum_internal[31:10]};
+        6'd16, 6'd20, 6'd24, 6'd28: shifted_sum = {sum_internal[26:0], sum_internal[31:27]};
+        6'd17, 6'd21, 6'd25, 6'd29: shifted_sum = {sum_internal[22:0], sum_internal[31:23]};
+        6'd18, 6'd22, 6'd26, 6'd30: shifted_sum = {sum_internal[17:0], sum_internal[31:18]};
+        6'd19, 6'd23, 6'd27, 6'd31: shifted_sum = {sum_internal[11:0], sum_internal[31:12]};
+        6'd32, 6'd36, 6'd40, 6'd44: shifted_sum = {sum_internal[27:0], sum_internal[31:28]};
+        6'd33, 6'd37, 6'd41, 6'd45: shifted_sum = {sum_internal[20:0], sum_internal[31:21]};
+        6'd34, 6'd38, 6'd42, 6'd46: shifted_sum = {sum_internal[15:0], sum_internal[31:16]};
+        6'd35, 6'd39, 6'd43, 6'd47: shifted_sum = {sum_internal[8:0],  sum_internal[31:9]};
+        6'd48, 6'd52, 6'd56, 6'd60: shifted_sum = {sum_internal[25:0], sum_internal[31:26]};
+        6'd49, 6'd53, 6'd57, 6'd61: shifted_sum = {sum_internal[21:0], sum_internal[31:22]};
+        6'd50, 6'd54, 6'd58, 6'd62: shifted_sum = {sum_internal[16:0], sum_internal[31:17]};
+        6'd51, 6'd55, 6'd59, 6'd63: shifted_sum = {sum_internal[10:0], sum_internal[31:11]};
+        default: shifted_sum = sum_internal;
+    endcase
+end
 
 // finite state machine
 always @(posedge clk or negedge rst_n) begin
@@ -74,15 +109,7 @@ always @(posedge clk) begin
             step <= 0;
         end
         PROCESSING: begin
-            if (step >= 0 && step <= 15)
-                b <= b + lcs(a + F(b, c, d) + M_j + asct(step), prs(step));
-            else if (step >= 16 && step <= 31)
-                b <= b + lcs(a + G(b, c, d) + M_j + asct(step), prs(step));
-            else if (step >= 32 && step <= 47)
-                b <= b + lcs(a + H(b, c, d) + M_j + asct(step), prs(step));
-            else
-                b <= b + lcs(a + I(b, c, d) + M_j + asct(step), prs(step));  
-            
+            b <= b + shifted_sum;
             a <= d;
             d <= c;
             c <= b;
@@ -97,58 +124,8 @@ always @(posedge clk) begin
     endcase
 end
 
-// functions definitions
-//md5 functions
-function [0:31] F (input [0:31] X, Y, Z);
-    F = (X & Y) | (~X & Z);
-endfunction
-
-function [0:31] G (input [0:31] X, Y, Z);
-    G = (X & Z) | (Y & ~Z);
-endfunction
-
-function [0:31] H (input [0:31] X, Y, Z);
-    H = X ^ Y ^ Z;
-endfunction
-
-function [0:31] I (input [0:31] X, Y, Z);
-    I = Y ^ (X | ~Z);
-endfunction
-
-// left circular shift
-function [0:31] lcs (input [0:31] v, input[4:0] s);
-begin
-    lcs = ((v << s) | (v >> (32 - s)));
-end
-endfunction
-
-// per-round shift
-function [4:0] prs (input [5:0] step);
-begin
-    case (step)
-        0, 4, 8, 12: prs = 5'd7;
-        1, 5, 9, 13: prs = 5'd12;
-        2, 6, 10, 14: prs = 5'd17;
-        3, 7, 11, 15: prs = 5'd22;
-        16, 20, 24, 28: prs = 5'd5;
-        17, 21, 25, 29: prs = 5'd9;
-        18, 22, 26, 30: prs = 5'd14;
-        19, 23, 27, 31: prs = 5'd20;
-        32, 36, 40, 44: prs = 5'd4;
-        33, 37, 41, 45: prs = 5'd11;
-        34, 38, 42, 46: prs = 5'd16;
-        35, 39, 43, 47: prs = 5'd23;
-        48, 52, 56, 60: prs = 5'd6;
-        49, 53, 57, 61: prs = 5'd10;
-        50, 54, 58, 62: prs = 5'd15;
-        51, 55, 59, 63: prs = 5'd21;
-    endcase
-end
-endfunction
-
 // abs-sine constants table
 function [0:31] asct (input [5:0] step);
-begin
     case (step)
         0: asct = 32'hd76aa478;
         1: asct = 32'he8c7b756;
@@ -215,14 +192,11 @@ begin
         62: asct = 32'h2ad7d2bb;
         63: asct = 32'heb86d391;
     endcase
-end
 endfunction
 
 // fix endian order: abc = 61626380, but must be = 80636261
 function [0:31] feo32 (input [0:31] v);
-begin
     feo32 = {v[24:31], v[16:23], v[8:15], v[0:7]};
-end
 endfunction
 
 // which from 16 blocks must be accessed on each round
