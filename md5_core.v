@@ -22,6 +22,11 @@ localparam FINISHED = 3'b101;
 
 reg [2:0] state, next_state;
 
+wire [8:0] j;
+wire [0:31] M_j;
+assign j = {block32_index(step), 5'b0};
+assign M_j = feo32(input_data[j +: 32]);
+
 assign hash = {feo32(A), feo32(B), feo32(C), feo32(D)};
 assign done = state == FINISHED;
 
@@ -70,13 +75,13 @@ always @(posedge clk) begin
         end
         PROCESSING: begin
             if (step >= 0 && step <= 15)
-                b <= b + lcs(a + F(b, c, d) + feo32(input_data[32*step +: 32]) + asct(step), prs(step));
+                b <= b + lcs(a + F(b, c, d) + M_j + asct(step), prs(step));
             else if (step >= 16 && step <= 31)
-                b <= b + lcs(a + G(b, c, d) + feo32(input_data[32*((5*step+1) & 4'b1111) +: 32]) + asct(step), prs(step));
+                b <= b + lcs(a + G(b, c, d) + M_j + asct(step), prs(step));
             else if (step >= 32 && step <= 47)
-                b <= b + lcs(a + H(b, c, d) + feo32(input_data[32*((3*step+5) & 4'b1111) +: 32]) + asct(step), prs(step));
+                b <= b + lcs(a + H(b, c, d) + M_j + asct(step), prs(step));
             else
-                b <= b + lcs(a + I(b, c, d) + feo32(input_data[32*((7*step) & 4'b1111) +: 32]) + asct(step), prs(step));  
+                b <= b + lcs(a + I(b, c, d) + M_j + asct(step), prs(step));  
             
             a <= d;
             d <= c;
@@ -218,6 +223,76 @@ function [0:31] feo32 (input [0:31] v);
 begin
     feo32 = {v[24:31], v[16:23], v[8:15], v[0:7]};
 end
+endfunction
+
+// which from 16 blocks must be accessed on each round
+function [63:0] block32_index (input [5:0] i);
+    case (i)
+        0: block32_index = 4'd0;
+        1: block32_index = 4'd1;
+        2: block32_index = 4'd2;
+        3: block32_index = 4'd3;
+        4: block32_index = 4'd4;
+        5: block32_index = 4'd5;
+        6: block32_index = 4'd6;
+        7: block32_index = 4'd7;
+        8: block32_index = 4'd8;
+        9: block32_index = 4'd9;
+        10: block32_index = 4'd10;
+        11: block32_index = 4'd11;
+        12: block32_index = 4'd12;
+        13: block32_index = 4'd13;
+        14: block32_index = 4'd14;
+        15: block32_index = 4'd15;
+        16: block32_index = 4'd1;
+        17: block32_index = 4'd6;
+        18: block32_index = 4'd11;
+        19: block32_index = 4'd0;
+        20: block32_index = 4'd5;
+        21: block32_index = 4'd10;
+        22: block32_index = 4'd15;
+        23: block32_index = 4'd4;
+        24: block32_index = 4'd9;
+        25: block32_index = 4'd14;
+        26: block32_index = 4'd3;
+        27: block32_index = 4'd8;
+        28: block32_index = 4'd13;
+        29: block32_index = 4'd2;
+        30: block32_index = 4'd7;
+        31: block32_index = 4'd12;
+        32: block32_index = 4'd5;
+        33: block32_index = 4'd8;
+        34: block32_index = 4'd11;
+        35: block32_index = 4'd14;
+        36: block32_index = 4'd1;
+        37: block32_index = 4'd4;
+        38: block32_index = 4'd7;
+        39: block32_index = 4'd10;
+        40: block32_index = 4'd13;
+        41: block32_index = 4'd0;
+        42: block32_index = 4'd3;
+        43: block32_index = 4'd6;
+        44: block32_index = 4'd9;
+        45: block32_index = 4'd12;
+        46: block32_index = 4'd15;
+        47: block32_index = 4'd2;
+        48: block32_index = 4'd0;
+        49: block32_index = 4'd7;
+        50: block32_index = 4'd14;
+        51: block32_index = 4'd5;
+        52: block32_index = 4'd12;
+        53: block32_index = 4'd3;
+        54: block32_index = 4'd10;
+        55: block32_index = 4'd1;
+        56: block32_index = 4'd8;
+        57: block32_index = 4'd15;
+        58: block32_index = 4'd6;
+        59: block32_index = 4'd13;
+        60: block32_index = 4'd4;
+        61: block32_index = 4'd11;
+        62: block32_index = 4'd2;
+        63: block32_index = 4'd9;
+    endcase
 endfunction
 
 endmodule
