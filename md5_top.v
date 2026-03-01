@@ -15,6 +15,7 @@ wire pad_waiting, pad_done;
 wire [0:23] selector_block;
 wire is_last_block;
 wire [1:0] block_amount;
+reg last_padding;
 reg [1:0] block_count;
 reg [3:0] state, next_state;
 
@@ -76,7 +77,7 @@ always @* begin
         PAD_RESUME2: next_state = PAD_WAIT;
         PAD_WAIT: begin
             if (pad_waiting || pad_done)
-                if (block_count == 0 && block_amount == 1)
+                if (block_count == 0 && block_amount == 1 && last_padding == 0)
                     next_state = CORE_START1;
                 else
                     next_state = CORE_RESUME1;
@@ -108,9 +109,11 @@ always @(posedge clk) begin
         RESET, INIT_COUNTER: begin
             done <= 0;
             block_count <= 0;
+            last_padding <= 0;
         end
         CORE_EVAL: begin
             if (!is_last_block) block_count <= block_count + 1'b1;
+            if (is_last_block && pad_waiting) last_padding = 1'b1;
         end
         FINISHED: done <= 1;
     endcase
