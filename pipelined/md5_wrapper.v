@@ -24,7 +24,7 @@ always @(posedge clk) begin
 end
 
 always @(posedge clk) begin
-    if (hash_valid) data_out <= hash_out[31:0] ^ hash_out[127:96];
+    if (hash_valid) data_out <= hash_out;
 end
 
 endmodule

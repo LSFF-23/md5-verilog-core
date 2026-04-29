@@ -27,8 +27,7 @@ end
 
 initial begin
     clk = 0; msg = 0; msg_valid = 0;
-    #100;
-    @(posedge clk);
+    repeat (2) @(posedge clk);
 
     msg <= MSG_EMPTY; msg_valid <= 1;
     @(posedge clk);
@@ -40,6 +39,7 @@ initial begin
     @(posedge clk);
 
     msg_valid <= 0; msg <= 0;
+    @(posedge clk);
 
     /*
     Expected hashes:
@@ -49,8 +49,9 @@ initial begin
     */
 
     wait(hash_valid);
-    #30;
-    $stop(0);
+    repeat (3) @(posedge clk);
+
+    $finish(0);
 end
 
 endmodule
